@@ -137,6 +137,8 @@ def settings() {
             }
             input name: "controlledAlarm", type: "capability.alarm", title: "Which Alarms?", required: false, multiple: true
             input name: "chimeDevices", type: "capability.tone", title: "Which Chimes?", required: false, multiple: true
+            input name: "musicPlayerDevices", type: "capability.musicPlayer", title: "Which Music Player?", required: false, multiple: true
+            input name: "musicPlayerTrack", type: "number", title: "Music Player Track", required: false
             paragraph "Optionally set a delay time to revert switches, or turn off the alarm or chimes. If left blank, you'll have to revert them manually."
             input name: "revertDelay", type: "number", title: "Delay Time (seconds)", required: false
         }
@@ -388,7 +390,7 @@ private hideExecutionRestrictionsSection() {
 }
 
 private hideSwitchAlarmSection() {
-    (controlledSwitch || controlledAlarm || chimeDevices || revertDelay) ? false : true
+    (controlledSwitch || controlledAlarm || chimeDevices || revertDelay || musicPlayerDevices || musicPlayerTrack) ? false : true		   
 }
 
 private hidePushoverNotificationsSection() {
@@ -447,7 +449,15 @@ private sendMessage(msg) {
     chimeDevices.each() {
         it.beep()
     }
-    
+
+    //Notify via music player
+	def sound = safeToInt(musicPlayerTrack, 0)
+	if (sound) {
+		musicPlayerDevices.each() {
+			it.playSound(sound)
+		}
+	}	
+	
     //Speak Message
     if (speechDevices) {
         speechDevices.each() {
@@ -555,4 +565,14 @@ def resetSwitchAlarmChime() {
     chimeDevices.each() {
         it.off()
     }
+	
+    //Revert music player
+    musicPlayerDevices.each() {
+        it.off()
+    }
+	
+}
+
+private safeToInt(val, defaultVal=0) {
+	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }

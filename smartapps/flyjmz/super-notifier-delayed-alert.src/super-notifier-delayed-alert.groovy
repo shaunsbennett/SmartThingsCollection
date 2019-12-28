@@ -144,6 +144,19 @@ def settings() {
             input name: "ttsDevices", type: "capability.musicPlayer", title: "Which Text-To-Speech Speakers (e.g., Sonos)?", required: false, multiple: true
         }
 
+        section("Notify via Switch/Alarm/Chime", hidden: hideSwitchAlarmSection(), hideable: true) {
+            input "controlledSwitch", "capability.switch", title: "Which Switches?", required: false, multiple: true, submitOnChange: true
+            if (controlledSwitch) {
+                input "controlledSwitchOn", "bool", title: "Turn switch on or off?", required: false
+            }
+            input name: "controlledAlarm", type: "capability.alarm", title: "Which Alarms?", required: false, multiple: true
+            input name: "chimeDevices", type: "capability.tone", title: "Which Chimes?", required: false, multiple: true
+            input name: "musicPlayerDevices", type: "capability.musicPlayer", title: "Which Music Player?", required: false, multiple: true
+            input name: "musicPlayerTrack", type: "number", title: "Music Player Track", required: false
+            paragraph "Optionally set a delay time to revert switches, or turn off the alarm or chimes. If left blank, you'll have to revert them manually."
+            input name: "revertDelay", type: "number", title: "Delay Time (seconds)", required: false
+        }
+		
         section("Pushover Notifications", hidden: hidePushoverNotificationsSection(), hideable: true) {
             paragraph "Optionally send messages via Pushover." 
             input name: "pushoverDevice", type: "capability.notification", title: "Which Pushover Devices?", required: false, multiple: true, submitOnChange: true
@@ -570,8 +583,12 @@ private hhmm(time, fmt = "h:mm a") {
 }
 
 private hideExecutionRestrictionsSection() {
-    (starting || ending || days || modes || startingX || endingX) ? false : true
+    (starting || ending || days || modes || startingX || endingX || controlSwitch) ? false : true
 }
+
+private hideSwitchAlarmSection() {		
+    (controlledSwitch || controlledAlarm || chimeDevices || revertDelay || musicPlayerDevices || musicPlayerTrack) ? false : true		   
+}		
 
 private hidePushoverNotificationsSection() {
     (pushoverDevice) ? false : true
@@ -607,6 +624,41 @@ private timeIntervalLabel() {
 }
 
 private sendMessage(msg) {
+    //Schedule switch/alarm/chime end time
+    if (revertDelay) {
+        runIn(revertDelay.toInteger(),"resetSwitchAlarmChime")
+    }  
+    //Notify via switch
+    if (controlledSwitch) {
+        if (controlledSwitchOn) {
+            controlledSwitch.each() {
+                it.on()
+            }
+        } else {
+            controlledSwitch.each() {
+                it.off()
+            }
+        }
+    }
+    
+    //Notify via alarm
+    controlledAlarm?.each() {
+        it.on()
+    }
+
+    //Notify via chime
+    chimeDevices.each() {
+        it.beep()
+    }
+    
+    //Notify via music player
+	def sound = safeToInt(musicPlayerTrack, 0)
+	if (sound) {
+		musicPlayerDevices.each() {
+			it.playSound(sound)
+		}
+	}	
+   
     //Speak Message
     if (speechDevices) {
         speechDevices.each() {
@@ -688,4 +740,38 @@ private sendMessage(msg) {
     if (pushoverDevice) {
         pushoverDevice.sendMessage(msg, messagePriority)
     }
+}
+
+def resetSwitchAlarmChime() {
+    //Revert switch
+    if (controlledSwitch) {
+        if (controlledSwitchOn) {
+            controlledSwitch.each() {
+                it.off()
+            }
+        } else {
+            controlledSwitch.each() {
+                it.on()
+            }
+        }
+    }
+    
+    //Revert alarm
+    controlledAlarm?.each() {
+        it.off()
+    }
+
+    //Revert chime
+    chimeDevices.each() {
+        it.off()
+    }
+	
+    //Revert music player
+    musicPlayerDevices.each() {
+        it.off()
+    }
+}
+
+private safeToInt(val, defaultVal=0) {
+	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }
