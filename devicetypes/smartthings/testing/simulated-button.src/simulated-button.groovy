@@ -12,7 +12,7 @@
  *
  */
 metadata {
-	definition (name: "Simulated Button", namespace: "smartthings/testing", author: "SmartThings") {
+	definition (name: "Simulated Button", namespace: "smartthings/testing", author: "SmartThings", ocfResourceType: 'x.com.st.momentary') {
 		capability "Actuator"
 		capability "Button"
 		capability "Sensor"
