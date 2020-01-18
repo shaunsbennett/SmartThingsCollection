@@ -27,17 +27,14 @@ metadata {
 
 	}
 	tiles {
-		standardTile("button", "device.button", width: 1, height: 1) {
-			state "default", label: "", icon: "st.unknown.zwave.remote-controller", backgroundColor: "#ffffff"
-		}
  		standardTile("push", "device.button", width: 1, height: 1, decoration: "flat") {
-			state "default", label: "Push", backgroundColor: "#ffffff", action: "push"
+			state "default", label: "Push", icon: "st.samsung.da.RC_ic_power", backgroundColor: "#ffffff", action: "push"
 		} 
  		standardTile("hold", "device.button", width: 1, height: 1, decoration: "flat") {
-			state "default", label: "Hold", backgroundColor: "#ffffff", action: "hold"
+			state "default", label: "Hold", icon: "st.samsung.da.RC_ic_power", backgroundColor: "#ffffff", action: "hold"
 		}          
-		main "button"
-		details(["button","push","hold"])
+		main "push"
+		details(["push","hold"])
 	}
 }
 
