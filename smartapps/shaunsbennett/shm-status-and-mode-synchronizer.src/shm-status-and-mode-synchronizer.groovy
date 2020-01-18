@@ -105,7 +105,7 @@ def alarmSystemStatusEvent(evt) {
 }
 
 def executeAlarmSystemStatusHandler(value) {
-	value = fixAlarmSystemStatus(value)
+    value = fixValue(value,"alarm")	
 	if(location.currentState("alarmSystemStatus")?.value != value) {
         if(["away","stay","off"].contains(value)) {
         
@@ -118,13 +118,6 @@ def executeAlarmSystemStatusHandler(value) {
     }
 }
 
-def fixAlarmSystemStatus(value) {
-	value = value?.toLowerCase()
-    if(value == "disarm" || value == "home") { value = "off" }
-    else if(value == "night") { value = "stay" }
-    return value
-}
-
 // ***** mode *****
 
 def modeEvent(evt) {
@@ -134,7 +127,7 @@ def modeEvent(evt) {
 }
 
 def executeMode(value) {
-    value = fixModeValue(value)	
+    value = fixValue(value,"mode")	
     if (location.mode != value) {
         if (location.modes?.find{it.name == value}) {
         
@@ -147,10 +140,21 @@ def executeMode(value) {
     }
 }
 
-def fixModeValue(value) {
-    if(value == "off" || value == "disarm") { value = "home" }
-    else if(value == "stay") { value = "night" }
-	value = value?.capitalize()
+// ***** helpers *****
+
+def fixValue(value,section) {
+	if(section == "mode"){
+        if(value == "off" || value == "disarm") { value = "home" }
+        else if(value == "stay") { value = "night" }
+        value = value?.capitalize()    
+    }
+	else if(section == "alarm"){
+        value = value?.toLowerCase()
+        if(value == "disarm" || value == "home") { value = "off" }
+        else if(value == "night") { value = "stay" }  
+    }
 	return value
 }
+
+
 
