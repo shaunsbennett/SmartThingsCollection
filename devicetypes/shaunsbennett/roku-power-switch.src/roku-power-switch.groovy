@@ -18,37 +18,42 @@ metadata {
         capability "Sensor"
         capability "Switch"
         capability "Refresh"
-		capability "Health Check"
 	}
 
+ // UI tile definitions
     tiles(scale: 2) {
-        multiAttributeTile(name:"switch", type: "lighting", width: 6, height: 4, canChangeIcon: true){
+        multiAttributeTile(name:"rich-control", type: "lighting", canChangeIcon: true){
             tileAttribute ("device.switch", key: "PRIMARY_CONTROL") {
-                attributeState "on", label:'${name}', action:"switch.off", icon:"st.Home.home30", backgroundColor:"#00A0DC", nextState:"turningOff"
-                attributeState "off", label:'${name}', action:"switch.on", icon:"st.Home.home30", backgroundColor:"#FFFFFF", nextState:"turningOn", defaultState: true
-                attributeState "turningOn", label:'Turning On', action:"switch.off", icon:"st.Home.home30", backgroundColor:"#00A0DC", nextState:"turningOn"
-                attributeState "turningOff", label:'Turning Off', action:"switch.on", icon:"st.Home.home30", backgroundColor:"#FFFFFF", nextState:"turningOff"
-            }
+                 attributeState "on", label:'${name}', action:"switch.off", icon:"st.switches.switch.off", backgroundColor:"#00A0DC", nextState:"turningOff"
+                 attributeState "off", label:'${name}', action:"switch.on", icon:"st.switches.switch.on", backgroundColor:"#ffffff", nextState:"turningOn"
+                 attributeState "turningOn", label:'${name}', action:"switch.off", icon:"st.switches.switch.off", backgroundColor:"#00A0DC", nextState:"turningOff"
+                 attributeState "turningOff", label:'${name}', action:"switch.on", icon:"st.switches.switch.on", backgroundColor:"#ffffff", nextState:"turningOn"
+                 attributeState "offline", label:'${name}', icon:"st.switches.switch.off", backgroundColor:"#cccccc"
+ 			}
         }
 
-        standardTile("explicitOn", "device.switch", width: 2, height: 2, decoration: "flat") {
-            state "default", label: "On", action: "switch.on", icon: "st.Home.home30", backgroundColor: "#ffffff"
+        standardTile("switch", "device.switch", width: 2, height: 2, canChangeIcon: true) {
+            state "on", label:'${name}', action:"switch.off", icon:"st.switches.switch.off", backgroundColor:"#00A0DC", nextState:"turningOff"
+            state "off", label:'${name}', action:"switch.on", icon:"st.switches.switch.on", backgroundColor:"#ffffff", nextState:"turningOn"
+            state "turningOn", label:'${name}', action:"switch.off", icon:"st.switches.switch.off", backgroundColor:"#00A0DC", nextState:"turningOff"
+            state "turningOff", label:'${name}', action:"switch.on", icon:"st.switches.switch.on", backgroundColor:"#ffffff", nextState:"turningOn"
+            state "offline", label:'${name}', icon:"st.switches.switch.off", backgroundColor:"#cccccc"
         }
-        standardTile("explicitOff", "device.switch", width: 2, height: 2, decoration: "flat") {
-            state "default", label: "Off", action: "switch.off", icon: "st.Home.home30", backgroundColor: "#ffffff"
+
+        standardTile("refresh", "device.switch", inactiveLabel: false, height: 2, width: 2, decoration: "flat") {
+            state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
         }
-		standardTile("refresh", "device.status",  width: 2, height: 2, inactiveLabel: false, decoration: "flat") {
-			state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh", backgroundColor:"#ffffff"         
-		}
-        
+
         main(["switch"])
-        details(["switch", "explicitOn", "explicitOff", "refresh"])
-
+        details(["rich-control", "refresh"])
     }
+
     
     preferences {
         input name: "prefIP", type: "text", title: "IP Address", description: "Enter IP address", 
         	required: true, displayDuringSetup: true
+        input name: "prefTimeout", type: "number", range: "5..30", defaultValue: 15, title: "Device timeout", description: "Enter timeout seconds", 
+        	required: false, displayDuringSetup: true
     }
     
 }
@@ -69,10 +74,9 @@ def initialize() {
     
     setState("ip",prefIP)
     setState("port",8060)
-    
-	setDeviceHealth("initialize")
-    
-    runEvery5Minutes(refresh)
+    setState("timeout",(prefTimeout) ?: 15)
+        
+    runEvery15Minutes(refresh)
 
 	refresh()
     
@@ -155,6 +159,7 @@ def httpRequest(String path, String method = "GET", String contentType = "xml", 
     
     def host = getHostAddress()
     def dni = getHostAddress(true)
+
     def action
     def result = null
     
@@ -209,14 +214,14 @@ void httpRequestTimeout(data) {
     	if(data?.containsKey("command")) {
             switch(data.command) {            
                 case "set": 
-                	def params = 15
+                	def params = getState("timeout",15).toInteger()
                 	runIn(params, "httpRequestTimeout", [overwrite: true, data: ["command": "timeout", "action": action, "params": params]])
                 	break; 
                 case "unset": 
                 	unschedule('httpRequestTimeout')
                 	break; 
                 case "timeout": 
-                	setDeviceHealth("offline")
+                	sendEvent(name: "switch", value: "offline", descriptionText: "The device is offline")
                 	break; 
                 default: 
                 	log.warn "httpRequestTimeout: command not found -> ${data}"
