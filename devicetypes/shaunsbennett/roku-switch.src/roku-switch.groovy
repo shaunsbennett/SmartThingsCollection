@@ -18,19 +18,13 @@ metadata {
         capability "Sensor"
         capability "Switch"
         capability "Refresh"
-        
-        command "toggleMute"
-        command "volumeUp"
-        command "volumeDown"
 	}
 
  // UI tile definitions
     tiles(scale: 2) {
         standardTile("switch", "device.switch", width: 2, height: 2, canChangeIcon: true) {
-            state "on", label:'${name}', action:"switch.off", icon:"st.switches.switch.off", backgroundColor:"#00A0DC", nextState:"turningOff"
-            state "off", label:'${name}', action:"switch.on", icon:"st.switches.switch.on", backgroundColor:"#ffffff", nextState:"turningOn"
-            state "turningOn", label:'${name}', action:"switch.off", icon:"st.switches.switch.off", backgroundColor:"#00A0DC", nextState:"turningOff"
-            state "turningOff", label:'${name}', action:"switch.on", icon:"st.switches.switch.on", backgroundColor:"#ffffff", nextState:"turningOn"
+            state "on", label:'${name}', action:"switch.off", icon:"st.switches.switch.off", backgroundColor:"#00A0DC"
+            state "off", label:'${name}', action:"switch.on", icon:"st.switches.switch.on", backgroundColor:"#ffffff"
             state "offline", label:'${name}', icon:"st.switches.switch.off", backgroundColor:"#cccccc"
         }
 
@@ -38,29 +32,21 @@ metadata {
             state "default", label:"", action:"refresh.refresh", icon:"st.secondary.refresh"
         }
 
-        standardTile("volumeUp", "device.switch", inactiveLabel: false, height: 2, width: 2, decoration: "flat") {
-            state "default", label:"Vol Up", action:"volumeUp", icon:"st.samsung.da.oven_ic_plus"
-        }
-        
-        standardTile("volumeDown", "device.switch", inactiveLabel: false, height: 2, width: 2, decoration: "flat") {
-            state "default", label:"Vol Down", action:"volumeDown", icon:"st.samsung.da.oven_ic_minus"
-        }
-        
-        standardTile("toggleMute", "device.switch", inactiveLabel: false, height: 2, width: 2, decoration: "flat") {
-            state "default", label:"Toggle Mute", action:"toggleMute", icon:"st.custom.sonos.muted"
-        }
-
         main(["switch"])
-        details(["switch", "refresh", "volumeUp", "volumeDown", "toggleMute"])
+        details(["switch", "refresh"])
     }
 
     
     preferences {
         input name: "prefIP", type: "text", title: "IP Address", description: "Enter IP address", 
         	required: true, displayDuringSetup: true
-        input name: "prefTimeout", type: "number", range: "5..30", defaultValue: 15, title: "Device timeout", description: "Enter timeout seconds", 
+        input name: "prefTimeout", type: "number", range: "5..30", defaultValue: 15, title: "Device timeout", description: "enter timeout seconds", 
         	required: false, displayDuringSetup: true
-    }
+		input name: "prefKeyPress", type: "enum", title: "KeyPress Mode (disables on/off)", options: ["No KeyPress Mode", "VolumeUp", "VolumeDown", "VolumeMute"], description: "ECP KeyPress", 
+        	required: true, displayDuringSetup: true
+        input name: "prefAppId", type: "number", range: "0..99999", defaultValue: 0, title: "Start App Automatically", description: "AppId, 0 to disable", 
+        	required: false, displayDuringSetup: true
+		}
     
 }
 
@@ -81,10 +67,18 @@ def initialize() {
     setState("ip",prefIP)
     setState("port",8060)
     setState("timeout",(prefTimeout) ?: 15)
-        
-    runEvery15Minutes(refresh)
-
-	refresh()
+    //
+    String keyPress = prefKeyPress ?: ""
+    setState("keypress", (keyPress.equals("No KeyPress Mode")) ? "" : keyPress )
+    //
+    setState("appid",(prefAppId) ?: 0)
+    
+	if(getState("keypress","")) {
+    	sendKeyPressEventOff()
+    }
+    else {
+    	refresh()
+    }
     
 }
 
@@ -97,45 +91,59 @@ def parse(String description) {
 // *****  commands   *****
 
 def on() {
-    sendKeyPress("PowerOn")
+    sendKeyPressOverride("PowerOn")
 }
 
 def off() {
-    sendKeyPress("PowerOff")
+    sendKeyPressOverride("PowerOff")
 }
 
 def refresh() {
 	sendQuery("device-info")
 }
 
-def ping() {
-	refresh()
+// ***** cmd  *****
+
+def sendKeyPressOverride(key){
+    def keyPress = getState("keypress","")
+	if(keyPress) {
+        key=keyPress
+		sendKeyPressEventOn()
+        runIn(5, sendKeyPressEventOff)
+	}
+    sendKeyPress(key)   
 }
 
-def toggleMute() {
-    sendKeyPress("VolumeMute") 
+def sendKeyPressEventOn() {
+    sendEvent(name: "switch", value: "on", descriptionText: "The device is in keypress mode")
 }
 
-def volumeUp() {
-    sendKeyPress("VolumeUp") 
+def sendKeyPressEventOff() {
+    sendEvent(name: "switch", value: "off", descriptionText: "The device is in keypress mode")
 }
 
-def volumeDown() {
-    sendKeyPress("VolumeDown") 
+def sendAppIdLive() {
+    def appId = getState("appid",0)          	
+    if(appId) {
+    	sendLaunch("${appId}?MediaType=live")
+    }
 }
 
 // ***** roku parsers  *****
 
 private parseDeviceInfo(xml) {
-    def item
-    def val
+    def item = xml.'power-mode'
+    def val = item=="PowerOn" ? "on" : "off"
     
-    item = xml.'power-mode'
-    val = item=="PowerOn" ? "on" : "off"
     if(device.currentValue("switch") != val) {
-		log.debug "parseDeviceInfo: ${item}"
+		log.trace "parseDeviceInfo: ${item}"
     	sendEvent(name: "switch", value: val, isStateChange: true)
+        if( val == "on" && getState("lastkeypress","") == "PowerOn" ) {
+            runIn(2, sendAppIdLive)
+        }
     }
+    
+    setState("lastkeypress","")
 }
 
 // ***** roku requests  *****
@@ -145,7 +153,12 @@ def sendQuery(String query) {
 }
 
 def sendKeyPress(String key) {
+	setState("lastkeypress",key)
 	sendRequest([flag: "keypress", request: key])	
+}
+
+def sendLaunch(String data) {
+	sendRequest([flag: "launch", request: data])	
 }
 
 private sendRequest(data) {
@@ -155,13 +168,13 @@ private sendRequest(data) {
     	if(data.flag == 'query') {
         	method = "GET"
         }
-        else if(data.flag == 'keypress') {
+        else if(data.flag == 'keypress' || data.flag == 'launch') {
         	method = "POST"     
         }   
         path = "${data.flag}/${data.request}"
         if(path && method) {
             httpRequest(path,method)
-            if(data.flag == 'keypress' && path.contains("Power")) {
+            if(data.flag == 'keypress' && path.contains("Power") && ! getState("keypress","")) {
             	refresh()
             }
         }    
@@ -239,7 +252,7 @@ void httpRequestTimeout(data) {
                 	unschedule('httpRequestTimeout')
                 	break; 
                 case "timeout": 
-                	sendEvent(name: "switch", value: "offline", descriptionText: "The device is offline")
+                    sendEvent(name: "switch", value: "offline", descriptionText: "The device is offline")
                 	break; 
                 default: 
                 	log.warn "httpRequestTimeout: command not found -> ${data}"
