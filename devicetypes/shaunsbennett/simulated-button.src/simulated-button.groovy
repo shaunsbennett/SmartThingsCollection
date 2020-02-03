@@ -16,8 +16,7 @@ metadata {
 		capability "Actuator"
 		capability "Button"
 		capability "Sensor"
-		capability "Health Check"
-        capability "Momentary"
+		capability "Health Check"        
         
         command "push"
         command "hold"
@@ -63,7 +62,30 @@ def updated() {
 private initialize() {
 	log.trace "Executing 'initialize'"
 
-	sendEvent(name: "DeviceWatch-DeviceStatus", value: "online")
-	sendEvent(name: "healthStatus", value: "online")
-	sendEvent(name: "DeviceWatch-Enroll", value: [protocol: "cloud", scheme:"untracked"].encodeAsJson(), displayed: false)
+	setDeviceHealth("initialize")
+}
+
+// *****  health  *****
+
+private setDeviceHealth(healthState) {      
+    if(healthState == "initialize") {
+        sendEvent(name: "DeviceWatch-DeviceStatus", value: "online")
+        sendEvent(name: "healthStatus", value: "online")    
+        sendEvent(name: "DeviceWatch-Enroll", value: [protocol: "cloud", scheme:"untracked"].encodeAsJson(), displayed: false)
+        return
+    }
+    else if(healthState == "online" || healthState == "offline"){
+        def deviceStatus = device.currentValue('DeviceWatch-DeviceStatus')
+        def healthStatus = device.currentValue('healthStatus')
+ 
+        log.trace "setDeviceHealth: ${healthStatus}; DeviceWatch-DeviceStatus: ${deviceStatus}" 
+		
+        if(deviceStatus != healthState || healthStatus != healthState) {
+            sendEvent(name: "DeviceWatch-DeviceStatus", value: healthState)       
+        	sendEvent(name: "healthStatus", value: healthState)           
+        }
+    }
+    else {
+        log.warn "setDeviceHealth: ${healthState} is unknown"    
+    }
 }
